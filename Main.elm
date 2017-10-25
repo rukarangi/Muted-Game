@@ -29,17 +29,17 @@ subscriptions model = Sub.batch
 view : Model -> Html Msg
 view model = 
   case model.state of
-    Menu -> menuView
-    Play -> playView
-    Over -> overView
+    Menu -> menuView model
+    Play -> playView model
+    Over -> overView model
 
-menuView : Model -> Msg
+menuView : Model -> Html Msg
 menuView model =
     let w = toString model.gameWidth
         h = toString model.gameHeight
     in svg
       [ width w, height h, viewBox ("0 0 " ++ w ++ " " ++ h ++ "")]
-      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x 300, y 300][]
+      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x "300", y "300"][]
       ]
 
 playView : Model -> Html Msg
@@ -57,7 +57,7 @@ overView model =
         h = toString model.gameHeight
     in svg
       [ width w, height h, viewBox ("0 0 " ++ w ++ " " ++ h ++ "")]
-      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x 300, y 300][]
+      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x "300", y "300"][]
       ]
 
 --viewms : Model -> Html Msg
