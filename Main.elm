@@ -1,5 +1,5 @@
 import Color exposing (..)
-import Keyboard 
+import Keyboard exposing (downs)
 import Time exposing (..)
 import Platform exposing (..)
 import Window
@@ -16,17 +16,158 @@ main = Html.program
   , view          = view
   } 
 
-subscriptions : Model -> Sub Msg
-subscriptions model = Time.every  (180 * millisecond) Tick
+--Subscrptions
 
+subscriptions : Model -> Sub Msg
+subscriptions model = Sub.batch 
+    [ Time.every  (200 * millisecond) Tick
+    , Keyboard.downs DownsInfo
+    ]
+
+--Veiw
 
 view : Model -> Html Msg
 view model = 
   let w = toString model.gameWidth
       h = toString model.gameHeight
   in svg
-      [ width w, height h, viewBox "0 0 100 100" ]
-      [ text_ [x "1", y "50", fill "red"] [ text (toString model.time)] ]
+      [ width w, height h, viewBox ("0 0 " ++ w ++ " " ++ h ++ "")]
+      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x (toString model.obi.x), y (toString model.obi.y)][]
+      ] 
+
+--viewms : Model -> Html Msg
+
+walkLeft : Int -> Model -> Model
+walkLeft kc model =
+    let obi = model.obi    
+    in  if kc == 65 then     
+            let nobi = { obi | vx = obi.vx - 10 }
+            in  { model | obi = nobi }
+        else
+            model
+
+walkRight : Int -> Model -> Model
+walkRight kc model =
+    let obi = model.obi    
+    in  if kc == 68 then     
+            let nobi = { obi | vx = obi.vx + 10 }
+            in  { model | obi = nobi }
+        else
+            model
+
+jump : Int -> Model -> Model
+jump kc model = 
+    let obi = model.obi    
+    in  if kc == 87 then
+            if obi.vy == 0 then     
+                let nobi = { obi | vx = obi.vy + 10 }
+                in  { model | obi = nobi }
+            else
+                model
+        else
+            model
+
+
+
+--Update 
+
+characterUpdate : Bool -> Model -> Character -> Character
+characterUpdate standingUpdate model obi =
+    { obi | x = obi.x + obi.vx
+            , y = obi.y + obi.vy
+            , vy = if standingUpdate == True then
+                        0
+                   else
+                        obi.vy + model.gravity
+            , vx = obi.vx }
+
+update : Msg -> Model -> (Model, Cmd Msg)
+update msg model =
+    case msg of
+        Tick time -> 
+            let obi = model.obi
+                standingUpdate = if obi.y > 400 then
+                                    True
+                                 else
+                                    False
+                nobi = characterUpdate standingUpdate model obi
+            in  ( { model | time = time, obi = nobi }, Cmd.none)
+        WindowSize size -> ( { model | gameWidth = size.width
+                                     , gameHeight = size.height }, Cmd.none)
+        DownsInfo kc -> 
+            (model |> jump kc |> walkLeft kc |> walkRight kc, Cmd.none)
+
+{-          
+actionCheck : Msg -> Model -> Model
+actionCheck msg model = 
+    msg
+        |> jump msg model 
+        |> walkRight msg model 
+        |> walkLeft msg model 
+
+-}
+--Model
+
+type alias Character = 
+    { x : Float
+    , y : Float
+    , vx : Float
+    , vy : Float
+    , exist : Existance
+    , life : Int
+    , standing : Bool
+    , association : Association
+    }  
+
+
+type alias Level =  Int
+
+type Association = Good | Bad
+
+type Existance = NonExist | Exist
+
+type State = Menu | Play | Over
+
+obi : Character
+obi = 
+    { x = 0.00
+    , y = 0.00
+    , vx = 0.00
+    , vy = 0.00
+    , exist = NonExist
+    , life = 5
+    , standing = True
+    , association = Good
+    }
+
+type alias Model = 
+    { state : State
+    , level : Level
+    , time : Time
+    , gameWidth : Int
+    , gameHeight : Int
+    , obi : Character 
+    , gravity : Float
+    }
+
+init : ( Model, Cmd Msg)
+init = (
+    { state = Menu
+    , level = 0
+    , time = 0
+    , gameWidth = 0
+    , gameHeight = 0
+    , obi   = obi
+    , gravity = 0.2
+    }, Task.perform WindowSize Window.size)
+
+type Msg 
+  = Tick Time
+  | WindowSize Window.Size
+  | DownsInfo Keyboard.KeyCode
+
+
+
 
 -- --Input
 -- type alias Input =
@@ -59,73 +200,6 @@ view model =
 --             delta
 -- 
 --Model
-
-type alias Character a = 
-    { a |
-      x : Float
-    , y : Float
-    , vx : Float
-    , vy : Float
-    , exist : Existance
-    , life : Int
-    , association : Association
-    }  
-
-type alias Player =
-    Character { score : Int }
-
-type alias Level =  Int
-
-type Association = Good | Bad
-
-type Existance = NonExist | Exist
-
-type State = Menu | Play | Over
-
-obi : Character {}
-obi = 
-    { x = 0.00
-    , y = 0.00
-    , vx = 0.00
-    , vy = 0.00
-    , exist = NonExist
-    , life = 5
-    , association = Good
-    }
-
-type alias Model = 
-    { state : State
-    , level : Level
-    , time : Time
-    , gameWidth : Int
-    , gameHeight : Int
-    , obi : Character {}
-    }
-
-init : ( Model, Cmd Msg)
-init = (
-    { state = Menu
-    , level = 0
-    , time = 0
-    , gameWidth = 0
-    , gameHeight = 0
-    , obi   = obi
-    }, Task.perform WindowSize Window.size)
-
-type Msg =
-    Tick Time
-    | WindowSize Window.Size
-
---Update 
-
-update : Msg -> Model -> (Model, Cmd Msg)
-update msg model =
-    case msg of
-        Tick time -> ( {model | time = time }, Cmd.none)
-        WindowSize size -> ( { model | gameWidth = size.width
-                                     , gameHeight = size.height }, Cmd.none)
-
-
 -- inRange : Character a -> Character a -> Bool
 -- inRange ({x,y,vx,vy,exist,life,association} as plr) ({x,y,vx,vy,exist,life,association} as enemy) =
 --     let
