@@ -28,12 +28,37 @@ subscriptions model = Sub.batch
 
 view : Model -> Html Msg
 view model = 
-  let w = toString model.gameWidth
-      h = toString model.gameHeight
-  in svg
+  case model.state of
+    Menu -> menuView
+    Play -> playView
+    Over -> overView
+
+menuView : Model -> Msg
+menuView model =
+    let w = toString model.gameWidth
+        h = toString model.gameHeight
+    in svg
       [ width w, height h, viewBox ("0 0 " ++ w ++ " " ++ h ++ "")]
-      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x (toString model.obi.x), y (toString model.obi.y)][]
-      ] 
+      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x 300, y 300][]
+      ]
+
+playView : Model -> Html Msg
+playView model = 
+    let w = toString model.gameWidth
+        h = toString model.gameHeight
+    in svg
+      [ width w, height h, viewBox ("0 0 " ++ w ++ " " ++ h ++ "")]
+      [ image [ xlinkHref "/static/Final Muted hero.png", width "386", height "131", x (toString model.obi.x), y (toString model.obi.y)][]
+      ]
+
+overView : Model -> Html Msg
+overView model =
+    let w = toString model.gameWidth
+        h = toString model.gameHeight
+    in svg
+      [ width w, height h, viewBox ("0 0 " ++ w ++ " " ++ h ++ "")]
+      [ image [ xlinkHref "/static/buttonPlaceholder.jpg", width "386", height "131", x 300, y 300][]
+      ]
 
 --viewms : Model -> Html Msg
 
