@@ -10,6 +10,7 @@ import Html exposing (Html)
 import Svg exposing (..)
 import Svg.Events exposing (onClick)
 import Svg.Attributes exposing (..)
+import Keyboard.Extra as KB
 
 main = Html.program
   { init          = init
@@ -23,7 +24,7 @@ main = Html.program
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.batch 
     [ Time.every (0.5 * millisecond) Tick
-    , Keyboard.downs DownsInfo
+    , Sub.map DownsInfo KB.subscriptions
     ]
 
 --Veiw
@@ -114,16 +115,20 @@ jump kc model =
 
 characterUpdate : Model -> Character -> Character
 characterUpdate model character =
-    let standingUpdate = character.y >= 600
+    let move = KB.wasd model.keys
+        standingUpdate = character.y >= 600
+        nvy = if abs character.vy <= 0.1 then character.vy - (toFloat move.y) * 0.2 else character.vy
+        nvxd = character.vx + (toFloat move.x) * 0.1
+        nvx = if abs nvxd > 3 then character.vx else nvxd
     in  if character.exist == Exist then 
             { character 
             | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
             , y = Basics.min 600 (character.y + character.vy)
             , vy = if standingUpdate then
-                        Basics.min 0 character.vy
+                        Basics.min 0 nvy
                    else
-                         character.vy + character.gravity
-            , gravity = if standingUpdate then 0 else 0.1
+                        nvy + character.gravity
+            , gravity = if standingUpdate then 0 else 0.4
             , exist = if character.life == 0 then
                         NonExist
                       else 
@@ -132,18 +137,18 @@ characterUpdate model character =
                         StandingStill
                        else
                         Jump
-            , vx = if abs character.x <= 0.1 || abs ((toFloat model.gameWidth - 100) - character.x) <= 0.1  then
+            , vx = if abs nvx <= 0.01 || abs ((toFloat model.gameWidth - 100) - nvx) <= 0.01  then
                         0
                     else
                         if standingUpdate then
-                            if abs character.vx > 0.01 then
-                                character.vx * 0.99
-                            else if abs character.vx <= 0.01 then
+                            if abs nvx > 0.01 then
+                                nvx * 0.99
+                            else if abs nvx <= 0.01 then
                                 0
                             else
-                                character.vx
+                                nvx
                         else
-                        character.vx 
+                        nvx 
             , area = if character.x < 860 && character.y < 350 then
                         TopLeft
                      else if character.x < 860 && character.y > 350 then
@@ -189,8 +194,9 @@ update msg model =
                           , Random.generate EnemyNo (Random.int 1 4))
         WindowSize size -> ( { model | gameWidth = size.width
                                      , gameHeight = size.height }, Cmd.none)
-        DownsInfo kc -> 
-            (model |> jump kc |> walkLeft kc |> walkRight kc, Cmd.none)
+        DownsInfo kbmsg -> 
+            let keys = model.keys
+            in ({ model | keys = KB.update kbmsg keys }, Cmd.none ) 
 
 pathfind : Character -> Character -> Character
 pathfind obi character =
@@ -246,6 +252,7 @@ type alias Model =
     , gameHeight : Int
     , ai : Array Character
     , obi : Character
+    , keys : List KB.Key
     }
 
 type alias Level =  Int
@@ -305,12 +312,13 @@ init = (
     , gameHeight = 0
     , ai = aiMake 
     , obi   = obi
+    , keys = []
     }, Task.perform WindowSize Window.size)
 
 type Msg 
   = Tick Time
   | WindowSize Window.Size
-  | DownsInfo Keyboard.KeyCode
+  | DownsInfo KB.Msg
   | StatePlay
   | StateMenu
   | StateOver
