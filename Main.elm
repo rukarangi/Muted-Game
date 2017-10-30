@@ -95,10 +95,9 @@ characterUpdate : Model -> Character -> Character
 characterUpdate model character =
     let move = KB.wasd model.keys
 
-        checkPlatform ch pl =  ch.x >= (pl.x - pl.width / 2)   -- to the right of left end
-                            && ch.x <= (pl.x + pl.width / 2)   -- to the left of the right end
-                            && abs(ch.y + 30 - pl.y) < 1            -- within one pixel of the height
-                            && ch.vy >= 0                      -- moving down or not moving up or down (not up)
+        checkPlatform ch pl =  abs ((ch.x + 50) - pl.x) < pl.width/2  -- not further than half width away from centre
+                            && abs(ch.y + 30 - pl.y) < 5              -- within one pixel of the height
+                            && ch.vy >= 0                             -- moving down or not moving up or down (not up)
         onPlatform = List.any (checkPlatform character) model.platforms
         onGround = character.y >= ground
          
