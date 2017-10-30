@@ -51,19 +51,22 @@ menuView model =
       []
       ]
 
+enemieRender : Character -> Svg Msg
+enemieRender ch = svg [] []
+
 playView : Model -> Html Msg
 playView model = 
-    let enemie = Array.forEach enemieRender model.ai
+    let enemie = List.map enemieRender (Array.toList model.ai)
         w = model.gameWidth
         h = model.gameHeight
         platformX = (toFloat w) / 2
         platformY = (toFloat h) / 2
     in svg
       [ width (toString w), height (toString h), viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
-      [ enemie
-      , image [ xlinkHref "static/Final Muted hero.png", width "100", height "100", x (toString model.obi.x), y (toString model.obi.y)][]
+      (enemie ++
+      [ image [ xlinkHref "static/Final Muted hero.png", width "100", height "100", x (toString model.obi.x), y (toString model.obi.y)][]
       , image [ xlinkHref "static/placeholderplatform.png", width "390", height "60", x (toString platformX), y (toString (platformY + 100)) ][]
-      ]
+      ])
 
 overView : Model -> Html Msg
 overView model =
@@ -81,7 +84,7 @@ walkLeft : Int -> Model -> Model
 walkLeft kc model =
     let obi = model.obi    
     in  if kc == 97 then     
-            let nobi = { obi | vx = obi.vx - 1.2 }
+            let nobi = { obi | vx = obi.vx - 1.6 }
             in  { model | obi = nobi }
         else
             model
@@ -90,7 +93,7 @@ walkRight : Int -> Model -> Model
 walkRight kc model =
     let obi = model.obi    
     in  if kc == 100 then     
-            let nobi = { obi | vx = obi.vx + 1.2 }
+            let nobi = { obi | vx = obi.vx + 1.6 }
             in  { model | obi = nobi }
         else
             model
@@ -109,22 +112,14 @@ jump kc model =
 
 --Update 
 
-characterUpdate : Character -> Character
-characterUpdate character =
-    let standingUpdate = if character.y >= 600 then
-                                    True
-                                 else
-                                    False
-        edgeUpdate = if character.x < -250 || character.x > 1500 then
-                                    True
-                             else
-                                    False
-        friction = if standingUpdate then
-                        True
-                   else
-                        False
+characterUpdate : Model -> Character -> Character
+characterUpdate model character =
+    let standingUpdate = character.y >= 600
+        edgeUpdate = character.x < 0 || character.x > (toFloat model.gameWidth + 0)
+        friction = standingUpdate
     in  if character.exist == Exist then 
-            { character | x = character.x + character.vx
+            { character 
+            | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
             , y = Basics.min 600 (character.y + character.vy)
             , vy = if standingUpdate then
                         Basics.min 0 character.vy
@@ -195,8 +190,8 @@ update msg model =
         Tick time -> 
             let obi = model.obi
                 ai = model.ai
-                nai = (Array.map (characterUpdate << pathfind obi) ai) 
-                nobi = characterUpdate obi
+                nai = (Array.map (characterUpdate model << pathfind obi) ai) 
+                nobi = characterUpdate model obi
             in  ( { model | time = time
                           , obi = nobi
                           , ai = nai }
