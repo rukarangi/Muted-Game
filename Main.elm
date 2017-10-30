@@ -23,7 +23,7 @@ main = Html.program
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.batch 
     [ Time.every (0.5 * millisecond) Tick
-    , Keyboard.presses DownsInfo
+    , Keyboard.downs DownsInfo
     ]
 
 --Veiw
@@ -83,8 +83,8 @@ overView model =
 walkLeft : Int -> Model -> Model
 walkLeft kc model =
     let obi = model.obi    
-    in  if kc == 97 then     
-            let nobi = { obi | vx = obi.vx - 1.6 }
+    in  if kc == 65 then     
+            let nobi = { obi | vx = Basics.max (obi.vx - 1.6) -3 }
             in  { model | obi = nobi }
         else
             model
@@ -92,18 +92,18 @@ walkLeft kc model =
 walkRight : Int -> Model -> Model
 walkRight kc model =
     let obi = model.obi    
-    in  if kc == 100 then     
-            let nobi = { obi | vx = obi.vx + 1.6 }
+    in  if kc == 68 then     
+            let nobi = { obi | vx = Basics.min (obi.vx + 1.6) 3 }
             in  { model | obi = nobi }
         else
             model
 
 jump : Int -> Model -> Model
-jump kc model = 
-    let obi = model.obi    
-    in  if kc == 119 then
-            if obi.vy == 0 then     
-                let nobi = { obi | vy = -20 } --Got to figue out how to do jump acceleration! and edge acceleration
+jump kc model =
+    let obi = model.obi
+    in  if kc == 87 then
+            if obi.vy == 0 then
+                let nobi = { obi | vy = -5 } --Got to figue out how to do jump acceleration! and edge acceleration
                 in  { model | obi = nobi }
             else
                 model
@@ -115,8 +115,6 @@ jump kc model =
 characterUpdate : Model -> Character -> Character
 characterUpdate model character =
     let standingUpdate = character.y >= 600
-        edgeUpdate = character.x < 0 || character.x > (toFloat model.gameWidth + 0)
-        friction = standingUpdate
     in  if character.exist == Exist then 
             { character 
             | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
@@ -125,10 +123,7 @@ characterUpdate model character =
                         Basics.min 0 character.vy
                    else
                          character.vy + character.gravity
-            , gravity = if standingUpdate then
-                            0
-                        else 
-                            1
+            , gravity = if standingUpdate then 0 else 0.1
             , exist = if character.life == 0 then
                         NonExist
                       else 
@@ -137,18 +132,14 @@ characterUpdate model character =
                         StandingStill
                        else
                         Jump
-            , vx = if edgeUpdate then
+            , vx = if abs character.x <= 0.1 || abs ((toFloat model.gameWidth - 100) - character.x) <= 0.1  then
                         0
                     else
-                        if friction then
-                            if character.vx > 0.1 then
-                                character.vx - 0.1
-                            else if character.vx < -0.1 then
-                                character.vx + 0.1
-                            else if character.vx < 0.1 && character.vx > 0 then
-                                character.vx - character.vx
-                            else if character.vx > -0.1 && character.vx < 0 then
-                                character.vx + abs character.vx
+                        if standingUpdate then
+                            if abs character.vx > 0.01 then
+                                character.vx * 0.99
+                            else if abs character.vx <= 0.01 then
+                                0
                             else
                                 character.vx
                         else
