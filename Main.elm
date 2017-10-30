@@ -79,47 +79,17 @@ overView model =
       , image [ xlinkHref "static/buttonPlaceholder.jpg", width "386", height "131", x "300", y "300", Svg.Events.onClick StatePlay][]
       ]
 
---viewms : Model -> HtmluMsg
-
-walkLeft : Int -> Model -> Model
-walkLeft kc model =
-    let obi = model.obi    
-    in  if kc == 65 then     
-            let nobi = { obi | vx = Basics.max (obi.vx - 1.6) -3 }
-            in  { model | obi = nobi }
-        else
-            model
-
-walkRight : Int -> Model -> Model
-walkRight kc model =
-    let obi = model.obi    
-    in  if kc == 68 then     
-            let nobi = { obi | vx = Basics.min (obi.vx + 1.6) 3 }
-            in  { model | obi = nobi }
-        else
-            model
-
-jump : Int -> Model -> Model
-jump kc model =
-    let obi = model.obi
-    in  if kc == 87 then
-            if obi.vy == 0 then
-                let nobi = { obi | vy = -5 } --Got to figue out how to do jump acceleration! and edge acceleration
-                in  { model | obi = nobi }
-            else
-                model
-        else
-            model
-
 --Update 
-
+max_x_speed = 3
+jump_speed = 3
+base_gravity = 0.05
 characterUpdate : Model -> Character -> Character
 characterUpdate model character =
     let move = KB.wasd model.keys
         standingUpdate = character.y >= 600
-        nvy = if abs character.vy <= 0.1 then character.vy - (toFloat move.y) * 0.2 else character.vy
+        nvy = if abs (character.y - 600) < 0.5 then character.vy - (toFloat move.y) * jump_speed else character.vy
         nvxd = character.vx + (toFloat move.x) * 0.1
-        nvx = if abs nvxd > 3 then character.vx else nvxd
+        nvx = if abs nvxd > max_x_speed then character.vx else nvxd
     in  if character.exist == Exist then 
             { character 
             | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
@@ -128,7 +98,7 @@ characterUpdate model character =
                         Basics.min 0 nvy
                    else
                         nvy + character.gravity
-            , gravity = if standingUpdate then 0 else 0.4
+            , gravity = if standingUpdate then 0 else base_gravity
             , exist = if character.life == 0 then
                         NonExist
                       else 
