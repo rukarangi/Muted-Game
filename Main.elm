@@ -58,10 +58,10 @@ enemieRender ch = svg [] []
 platformRender : Platform -> Svg Msg
 platformRender pl =
     image [ xlinkHref "static/placeholderplatform.png"
-          , width "390"
-          , height "60"
-          , x (toString pl.x)
-          , y (toString (pl.y + 60)) ][]
+          , width  (toString  pl.width)
+          , height (toString (96 * pl.width / 426)) 
+          , x (toString (pl.x - (pl.width/2)))
+          , y (toString (pl.y + (96 * pl.width / 426))) ][]
 
 playView : Model -> Html Msg
 playView model = 
@@ -87,7 +87,7 @@ overView model =
 
 --Update 
 max_x_speed = 3
-jump_speed = -4
+jump_speed = -5
 base_gravity = 0.05
 ground = 600
 
@@ -95,10 +95,10 @@ characterUpdate : Model -> Character -> Character
 characterUpdate model character =
     let move = KB.wasd model.keys
 
-        checkPlatform ch pl =  ch.x >= pl.x               -- to the right of left end
-                            && ch.x <= pl.x + pl.width    -- to the left of the right end
-                            && abs((ch.y+30) - pl.y) < 1       -- within one pixel of the height
-                            && ch.vy >= 0                 -- moving down or not moving up or down (not up)
+        checkPlatform ch pl =  ch.x >= (pl.x - pl.width / 2)   -- to the right of left end
+                            && ch.x <= (pl.x + pl.width / 2)   -- to the left of the right end
+                            && abs(ch.y + 30 - pl.y) < 1            -- within one pixel of the height
+                            && ch.vy >= 0                      -- moving down or not moving up or down (not up)
         onPlatform = List.any (checkPlatform character) model.platforms
         onGround = character.y >= ground
          
@@ -122,7 +122,7 @@ characterUpdate model character =
     in  if character.exist == Exist then 
             { character 
             | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
-            , y = character.y + nvy
+            , y = Basics.min ground (character.y + nvy)
             , vy = nvy
             , gravity = base_gravity
             , exist = if character.life == 0 then
@@ -138,7 +138,7 @@ characterUpdate model character =
                     else
                         if onGround || onPlatform then
                             if abs nvx > 0.01 then
-                                nvx * 0.99
+                                nvx * 0.95
                             else if abs nvx <= 0.01 then
                                 0
                             else
@@ -250,7 +250,11 @@ type alias Platform =
 -- Make the platforms after we already have the width and height of game
 -- The width is to check if we have landed
 makePlatforms : Int -> Int -> List Platform
-makePlatforms w h = [ { x = (toFloat w) / 2, y = (toFloat h) / 2 + 100, width = 400 } ]
+makePlatforms w h = 
+    [ { x = (toFloat w) * (1/2),  y = (toFloat h) * (3/4) - 100,  width = 300 } 
+    , { x = (toFloat w) * (1/4),  y = (toFloat h) * (1/2) - 100,  width = 300 }
+    , { x = (toFloat w) * (7/10), y = (toFloat h) * (1/3) - 50,   width = 300 }
+    ]
 
 type alias Model = 
     { state : State
