@@ -55,18 +55,24 @@ menuView model =
 enemieRender : Character -> Svg Msg
 enemieRender ch = svg [] []
 
+platformRender : Platform -> Svg Msg
+platformRender pl =
+    image [ xlinkHref "static/placeholderplatform.png"
+          , width "390"
+          , height "60"
+          , x (toString pl.x)
+          , y (toString (pl.y + 60)) ][]
+
 playView : Model -> Html Msg
 playView model = 
     let enemie = List.map enemieRender (Array.toList model.ai)
+        plts = List.map platformRender model.platforms
         w = model.gameWidth
         h = model.gameHeight
-        platformX = (toFloat w) / 2
-        platformY = (toFloat h) / 2
     in svg
       [ width (toString w), height (toString h), viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
-      (enemie ++
+      (enemie ++ plts ++
       [ image [ xlinkHref "static/Final Muted hero.png", width "100", height "100", x (toString model.obi.x), y (toString model.obi.y)][]
-      , image [ xlinkHref "static/placeholderplatform.png", width "390", height "60", x (toString platformX), y (toString (platformY + 100)) ][]
       ])
 
 overView : Model -> Html Msg
@@ -81,36 +87,56 @@ overView model =
 
 --Update 
 max_x_speed = 3
-jump_speed = 3
+jump_speed = -4
 base_gravity = 0.05
+ground = 600
+
 characterUpdate : Model -> Character -> Character
 characterUpdate model character =
     let move = KB.wasd model.keys
-        standingUpdate = character.y >= 600
-        nvy = if abs (character.y - 600) < 0.5 then character.vy - (toFloat move.y) * jump_speed else character.vy
+
+        checkPlatform ch pl =  ch.x >= pl.x               -- to the right of left end
+                            && ch.x <= pl.x + pl.width    -- to the left of the right end
+                            && abs((ch.y+30) - pl.y) < 1       -- within one pixel of the height
+                            && ch.vy >= 0                 -- moving down or not moving up or down (not up)
+        onPlatform = List.any (checkPlatform character) model.platforms
+        onGround = character.y >= ground
+         
+        dvy =   if onGround || onPlatform then
+                    (toFloat move.y) * jump_speed 
+                else 
+                    0.0
+        nvy =   if onGround || onPlatform then
+                    if character.vy > 0 then   -- If going down, and you hit the ground or a platform, then stop
+                            0.0
+                        else 
+                            character.vy + dvy
+                else
+                    character.vy + dvy + character.gravity
+
         nvxd = character.vx + (toFloat move.x) * 0.1
-        nvx = if abs nvxd > max_x_speed then character.vx else nvxd
+        nvx = if abs nvxd > max_x_speed 
+                then character.vx 
+                else nvxd
+
     in  if character.exist == Exist then 
             { character 
             | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
-            , y = Basics.min 600 (character.y + character.vy)
-            , vy = if standingUpdate then
-                        Basics.min 0 nvy
-                   else
-                        nvy + character.gravity
-            , gravity = if standingUpdate then 0 else base_gravity
+            , y = character.y + nvy
+            , vy = nvy
+            , gravity = base_gravity
             , exist = if character.life == 0 then
                         NonExist
                       else 
                         Exist
-            , action = if standingUpdate then
+            , action = if onGround then
                         StandingStill
                        else
                         Jump
             , vx = if abs nvx <= 0.01 || abs ((toFloat model.gameWidth - 100) - nvx) <= 0.01  then
                         0
                     else
-                        if standingUpdate then
+                        if onGround || onPlatform then
                             if abs nvx > 0.01 then
                                 nvx * 0.99
                             else if abs nvx <= 0.01 then
@@ -163,7 +189,8 @@ update msg model =
                           , ai = nai }
                           , Random.generate EnemyNo (Random.int 1 4))
         WindowSize size -> ( { model | gameWidth = size.width
-                                     , gameHeight = size.height }, Cmd.none)
+                                     , gameHeight = size.height
+                                     , platforms = makePlatforms size.width size.height }, Cmd.none)
         DownsInfo kbmsg -> 
             let keys = model.keys
             in ({ model | keys = KB.update kbmsg keys }, Cmd.none ) 
@@ -214,10 +241,22 @@ type alias Character =
     , association : Association
     }  
 
+type alias Platform =
+    { x : Float 
+    , y : Float
+    , width : Float 
+    }
+
+-- Make the platforms after we already have the width and height of game
+-- The width is to check if we have landed
+makePlatforms : Int -> Int -> List Platform
+makePlatforms w h = [ { x = (toFloat w) / 2, y = (toFloat h) / 2 + 100, width = 400 } ]
+
 type alias Model = 
     { state : State
     , level : Level
     , time : Time
+    , platforms : List Platform
     , gameWidth : Int
     , gameHeight : Int
     , ai : Array Character
@@ -278,6 +317,7 @@ init = (
     { state = Menu
     , level = 0
     , time = 0
+    , platforms = []
     , gameWidth = 0
     , gameHeight = 0
     , ai = aiMake 
