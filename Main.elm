@@ -23,7 +23,7 @@ main = Html.program
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.batch 
-    [ Time.every (0.5 * millisecond) Tick
+    [ Time.every (500 * millisecond) Tick
     , Sub.map DownsInfo KB.subscriptions
     ]
 
@@ -72,7 +72,7 @@ playView model =
     in svg
       [ width (toString w), height (toString h), viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
       (enemie ++ plts ++
-      [ image [ xlinkHref "static/Final Muted hero.png", width "100", height "100", x (toString model.obi.x), y (toString model.obi.y)][]
+      [ image [ xlinkHref "static/OBI-running.gif", width "100", height "100", x (toString model.obi.x), y (toString model.obi.y)][]
       ])
 
 overView : Model -> Html Msg
@@ -86,15 +86,25 @@ overView model =
       ]
 
 --Update 
-max_x_speed = 3
-jump_speed = -5
-base_gravity = 0.05
+max_x_speed = 30
+jump_speed = -50
+base_gravity = 5
 ground = 600
 
 characterUpdate : Model -> Character -> Character
 characterUpdate model character =
-    let move = KB.wasd model.keys
-
+    let obi = model.obi
+        {-
+        timeSLowY = if character.good then
+                        abs character.vy - (abs character.vy + (abs character.vy / 5))
+                    else
+                        obi.timeSLowY
+        timeSLowX = if character.good then
+                        abs character.vx - (abs character.vx + (abs character.vx / 5))
+                    else
+                        obi.timeSLowX
+        -}
+        move = KB.wasd model.keys
         checkPlatform ch pl =  abs ((ch.x + 50) - pl.x) < pl.width/2  -- not further than half width away from centre
                             && abs(ch.y + 30 - pl.y) < 5              -- within one pixel of the height
                             && ch.vy >= 0                             -- moving down or not moving up or down (not up)
@@ -102,7 +112,7 @@ characterUpdate model character =
         onGround = character.y >= ground
          
         dvy =   if onGround || onPlatform then
-                    (toFloat move.y) * jump_speed 
+                    ((toFloat move.y) * jump_speed) - model.timeSLowY 
                 else 
                     0.0
         nvy =   if onGround || onPlatform then
@@ -123,15 +133,14 @@ characterUpdate model character =
             | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
             , y = Basics.min ground (character.y + nvy)
             , vy = nvy
+            , action = if character.vy /= 0 then
+                            Jump
+                       else StandingStill
             , gravity = base_gravity
             , exist = if character.life == 0 then
                         NonExist
                       else 
                         Exist
-            , action = if onGround then
-                        StandingStill
-                       else
-                        Jump
             , vx = if abs nvx <= 0.01 || abs ((toFloat model.gameWidth - 100) - nvx) <= 0.01  then
                         0
                     else
@@ -183,9 +192,13 @@ update msg model =
                 ai = model.ai
                 nai = (Array.map (characterUpdate model << pathfind obi) ai) 
                 nobi = characterUpdate model obi
+                ntimeSlowY = abs obi.vy - (abs obi.vy + (abs obi.vy / 5))
+                ntimeSlowX = abs obi.vx - (abs obi.vx + (abs obi.vx / 5))
             in  ( { model | time = time
                           , obi = nobi
-                          , ai = nai }
+                          , ai = nai
+                          , timeSLowY = ntimeSlowY
+                          , timeSLowX = ntimeSlowX }
                           , Random.generate EnemyNo (Random.int 1 4))
         WindowSize size -> ( { model | gameWidth = size.width
                                      , gameHeight = size.height
@@ -237,7 +250,7 @@ type alias Character =
     , action : Action
     , gravity : Float
     , area : Area
-    , association : Association
+    , good : Bool
     }  
 
 type alias Platform =
@@ -265,6 +278,8 @@ type alias Model =
     , ai : Array Character
     , obi : Character
     , keys : List KB.Key
+    , timeSLowY : Float
+    , timeSLowX : Float
     }
 
 type alias Level =  Int
@@ -292,7 +307,7 @@ standardAi =
     , action = StandingStill
     , gravity = 0.1
     , area = TopLeft
-    , association = Good
+    , good = False
     }
 
 aiMake : Array Character
@@ -312,7 +327,7 @@ obi =
     , action = StandingStill
     , gravity = 0.1
     , area = TopLeft
-    , association = Good
+    , good = True
     }
 
 init : (Model, Cmd Msg)
@@ -326,6 +341,8 @@ init = (
     , ai = aiMake 
     , obi   = obi
     , keys = []
+    , timeSLowY = 0.00
+    , timeSLowX = 0.00
     }, Task.perform WindowSize Window.size)
 
 type Msg 
