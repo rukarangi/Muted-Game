@@ -40,10 +40,11 @@ menuView : Model -> Html Msg
 menuView model =
     let w = model.gameWidth
         h = model.gameHeight
-        buttonX = (toFloat w) / 2 - 193
-        buttonY = (toFloat h) / 2 - 65
+        buttonX = w / 2 - 193
+        buttonY = h / 2 - 65
     in svg
-      [ width (toString w), height (toString h), viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
+      [ width (toString (w*0.9)), height (toString (h*0.9))
+      , viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
       [ image [ xlinkHref "static/buttonPlaceholder.jpg"
       , width "386", height "131"
       , x (toString buttonX)
@@ -70,9 +71,12 @@ playView model =
         w = model.gameWidth
         h = model.gameHeight
     in svg
-      [ width (toString w), height (toString h), viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
+      [ width (toString (w*0.9)), height (toString (h*0.9))
+      , viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
       (enemie ++ plts ++
-      [ image [ xlinkHref "static/OBI-running.gif", width "100", height "100", x (toString model.obi.x), y (toString model.obi.y)][]
+      [ image [ xlinkHref "static/OBI-running.gif"
+              , width "100", height "100"
+              , x (toString model.obi.x), y (toString model.obi.y)][]
       ])
 
 overView : Model -> Html Msg
@@ -80,16 +84,20 @@ overView model =
     let w = toString model.gameWidth
         h = toString model.gameHeight
     in svg
-      [ width (toString w), height (toString h), viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
-      [ image [ xlinkHref "static/buttonPlaceholder.jpg", width "386", height "131", x "300", y "300", Svg.Events.onClick StateMenu][]
-      , image [ xlinkHref "static/buttonPlaceholder.jpg", width "386", height "131", x "300", y "300", Svg.Events.onClick StatePlay][]
+      [ width (toString w), height (toString h)
+      , viewBox ("0 0 " ++ (toString w) ++ " " ++ (toString h) ++ "")]
+      [ image [ xlinkHref "static/buttonPlaceholder.jpg"
+              , width "386", height "131", x "300", y "300"
+              , Svg.Events.onClick StateMenu][]
+      , image [ xlinkHref "static/buttonPlaceholder.jpg"
+              , width "386", height "131", x "300", y "300"
+              , Svg.Events.onClick StatePlay][]
       ]
 
 --Update 
-max_x_speed = 30
-jump_speed = -50
-base_gravity = 5
-ground = 600
+
+max_x_speed = 3
+base_gravity = 0.05
 
 characterUpdate : Model -> Character -> Character
 characterUpdate model character =
@@ -109,10 +117,10 @@ characterUpdate model character =
                             && abs(ch.y + 30 - pl.y) < 5              -- within one pixel of the height
                             && ch.vy >= 0                             -- moving down or not moving up or down (not up)
         onPlatform = List.any (checkPlatform character) model.platforms
-        onGround = character.y >= ground
+        onGround = character.y >= model.ground
          
         dvy =   if onGround || onPlatform then
-                    ((toFloat move.y) * jump_speed) - model.timeSLowY 
+                    ((toFloat move.y) * model.jump_speed) - model.timeSLowY 
                 else 
                     0.0
         nvy =   if onGround || onPlatform then
@@ -130,8 +138,8 @@ characterUpdate model character =
 
     in  if character.exist == Exist then 
             { character 
-            | x = Basics.min (toFloat model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
-            , y = Basics.min ground (character.y + nvy)
+            | x = Basics.min (model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
+            , y = Basics.min model.ground (character.y + nvy)
             , vy = nvy
             , action = if character.vy /= 0 then
                             Jump
@@ -141,7 +149,7 @@ characterUpdate model character =
                         NonExist
                       else 
                         Exist
-            , vx = if abs nvx <= 0.01 || abs ((toFloat model.gameWidth - 100) - nvx) <= 0.01  then
+            , vx = if abs nvx <= 0.01 || abs ((model.gameWidth - 100) - nvx) <= 0.01  then
                         0
                     else
                         if onGround || onPlatform then
@@ -200,9 +208,14 @@ update msg model =
                           , timeSLowY = ntimeSlowY
                           , timeSLowX = ntimeSlowX }
                           , Random.generate EnemyNo (Random.int 1 4))
-        WindowSize size -> ( { model | gameWidth = size.width
-                                     , gameHeight = size.height
-                                     , platforms = makePlatforms size.width size.height }, Cmd.none)
+        WindowSize size -> 
+            let w = toFloat size.width
+                h = toFloat size.height
+            in { model | gameWidth = w
+                       , gameHeight = h
+                       , ground = 0.85 * h
+                       , jump_speed = -0.005 * h 
+                       , platforms = makePlatforms w h } ! []
         DownsInfo kbmsg -> 
             let keys = model.keys
             in ({ model | keys = KB.update kbmsg keys }, Cmd.none ) 
@@ -261,11 +274,11 @@ type alias Platform =
 
 -- Make the platforms after we already have the width and height of game
 -- The width is to check if we have landed
-makePlatforms : Int -> Int -> List Platform
+makePlatforms : Float -> Float -> List Platform
 makePlatforms w h = 
-    [ { x = (toFloat w) * (1/2),  y = (toFloat h) * (3/4) - 100,  width = 300 } 
-    , { x = (toFloat w) * (1/4),  y = (toFloat h) * (1/2) - 100,  width = 300 }
-    , { x = (toFloat w) * (7/10), y = (toFloat h) * (1/3) - 50,   width = 300 }
+    [ { x = w * (1/2),  y = h * (3/4) - 100,  width = 300 } 
+    , { x = w * (1/4),  y = h * (1/2) - 100,  width = 300 }
+    , { x = w * (7/10), y = h * (1/3) - 50,   width = 300 }
     ]
 
 type alias Model = 
@@ -273,8 +286,10 @@ type alias Model =
     , level : Level
     , time : Time
     , platforms : List Platform
-    , gameWidth : Int
-    , gameHeight : Int
+    , gameWidth : Float
+    , gameHeight : Float
+    , ground : Float
+    , jump_speed : Float
     , ai : Array Character
     , obi : Character
     , keys : List KB.Key
@@ -338,8 +353,10 @@ init = (
     , platforms = []
     , gameWidth = 0
     , gameHeight = 0
+    , jump_speed = -5
+    , ground = 0
     , ai = aiMake 
-    , obi   = obi
+    , obi = obi
     , keys = []
     , timeSLowY = 0.00
     , timeSLowX = 0.00
