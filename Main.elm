@@ -23,7 +23,7 @@ main = Html.program
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.batch 
-    [ Time.every (500 * millisecond) Tick
+    [ Time.every (0.5 * millisecond) Tick
     , Sub.map DownsInfo KB.subscriptions
     ]
 
