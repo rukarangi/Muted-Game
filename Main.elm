@@ -22,10 +22,13 @@ main = Html.program
 --Subscrptions
 
 subscriptions : Model -> Sub Msg
-subscriptions model = Sub.batch 
-    [ Time.every (0.5 * millisecond) Tick
-    , Sub.map DownsInfo KB.subscriptions
-    ]
+subscriptions model =  
+    let
+        obi = model.obi   
+    in  Sub.batch
+        [ Time.every (1/5 * millisecond) Tick
+        , Sub.map DownsInfo KB.subscriptions
+        ]
 
 --Veiw
 
@@ -54,7 +57,11 @@ menuView model =
       ]
 
 enemieRender : Character -> Svg Msg
-enemieRender ch = svg [] []
+enemieRender character = svg [] [
+    image [ xlinkHref "static/OBI-running.png"
+              , width "100", height "100"
+              , x (toString (if character.exist == Exist then character.x else -500))
+              , y (toString (if character.exist == Exist then character.y else -500))][]]
 
 platformRender : Platform -> Svg Msg
 platformRender pl =
@@ -76,7 +83,8 @@ playView model =
       (enemie ++ plts ++
       [ image [ xlinkHref "static/OBI-running.gif"
               , width "100", height "100"
-              , x (toString model.obi.x), y (toString model.obi.y)][]
+              , x (toString (if model.obi.exist == Exist then model.obi.x else -500))
+              , y (toString (if model.obi.exist == Exist then model.obi.y else -500))][]
       ])
 
 overView : Model -> Html Msg
@@ -96,6 +104,20 @@ overView model =
 
 --Update 
 
+hitCheck : Array Bool -> Bool
+hitCheck comparisons =
+    List.member True (Array.toList comparisons)
+
+checkRange : Model -> Character -> Bool
+checkRange model enemy = 
+    let
+        obi = model.obi   
+    in
+        if abs (obi.y - enemy.y) <= 50 && abs (obi.x - enemy.x) <= 50 then
+            True
+        else
+            model.obiInRange
+
 max_x_speed = 3
 base_gravity = 0.05
 
@@ -112,15 +134,17 @@ characterUpdate model character =
                     else
                         obi.timeSLowX
         -}
-        move = KB.wasd model.keys
+        move = if character.good then
+                    KB.wasd model.keys
+               else
+                    character.aiMove
         checkPlatform ch pl =  abs ((ch.x + 50) - pl.x) < pl.width/2  -- not further than half width away from centre
                             && abs(ch.y + 30 - pl.y) < 5              -- within one pixel of the height
                             && ch.vy >= 0                             -- moving down or not moving up or down (not up)
         onPlatform = List.any (checkPlatform character) model.platforms
         onGround = character.y >= model.ground
-         
         dvy =   if onGround || onPlatform then
-                    ((toFloat move.y) * model.jump_speed) - model.timeSLowY 
+                    toFloat move.y * model.jump_speed
                 else 
                     0.0
         nvy =   if onGround || onPlatform then
@@ -130,7 +154,6 @@ characterUpdate model character =
                             character.vy + dvy
                 else
                     character.vy + dvy + character.gravity
-
         nvxd = character.vx + (toFloat move.x) * 0.1
         nvx = if abs nvxd > max_x_speed 
                 then character.vx 
@@ -138,17 +161,24 @@ characterUpdate model character =
 
     in  if character.exist == Exist then 
             { character 
-            | x = Basics.min (model.gameWidth - 100) (Basics.max 0.0 (character.x + character.vx))
+            | x = Basics.min (model.gameWidth) (Basics.max 0.0 (character.x + character.vx))
             , y = Basics.min model.ground (character.y + nvy)
             , vy = nvy
             , action = if character.vy /= 0 then
                             Jump
                        else StandingStill
             , gravity = base_gravity
-            , exist = if character.life == 0 then
-                        NonExist
-                      else 
-                        Exist
+            , exist =   if character.life == 0 then
+                            NonExist
+                        else 
+                            Exist
+            , life = if character.good then
+                        if model.obiInRange then
+                            Basics.max (character.life - 1) 0
+                        else
+                            character.life
+                     else
+                        character.life
             , vx = if abs nvx <= 0.01 || abs ((model.gameWidth - 100) - nvx) <= 0.01  then
                         0
                     else
@@ -161,14 +191,14 @@ characterUpdate model character =
                                 nvx
                         else
                         nvx 
-            , area = if character.x < 860 && character.y < 350 then
+            , area = if character.x < (model.gameWidth / 2) && character.y < (model.gameHeight / 2) then
                         TopLeft
-                     else if character.x < 860 && character.y > 350 then
+                     else if character.x < (model.gameWidth / 2) && character.y > (model.gameHeight / 2) then
                         BottomLeft
-                     else if character.x > 860 && character.y > 350 then
-                        BottomRight
-                     else if character.x > 860 && character.y < 350 then
+                     else if character.x > (model.gameWidth / 2) && character.y < (model.gameHeight / 2) then
                         TopRight
+                     else if character.x > (model.gameWidth / 2) && character.y > (model.gameHeight / 2) then
+                        BottomRight
                      else
                         TopLeft}
         else
@@ -198,15 +228,12 @@ update msg model =
         Tick time -> 
             let obi = model.obi
                 ai = model.ai
-                nai = (Array.map (characterUpdate model << pathfind obi) ai) 
+                nai = (Array.map (characterUpdate model << pathfind model obi) ai) 
                 nobi = characterUpdate model obi
-                ntimeSlowY = abs obi.vy - (abs obi.vy + (abs obi.vy / 5))
-                ntimeSlowX = abs obi.vx - (abs obi.vx + (abs obi.vx / 5))
-            in  ( { model | time = time
+            in  ( { model | obiInRange = (hitCheck (Array.map (checkRange model) ai))  
+                          , time = time
                           , obi = nobi
-                          , ai = nai
-                          , timeSLowY = ntimeSlowY
-                          , timeSLowX = ntimeSlowX }
+                          , ai = nai }
                           , Random.generate EnemyNo (Random.int 1 4))
         WindowSize size -> 
             let w = toFloat size.width
@@ -214,43 +241,121 @@ update msg model =
             in { model | gameWidth = w
                        , gameHeight = h
                        , ground = 0.85 * h
-                       , jump_speed = -0.005 * h 
+                       , jump_speed = -0.006 * h 
                        , platforms = makePlatforms w h } ! []
         DownsInfo kbmsg -> 
             let keys = model.keys
             in ({ model | keys = KB.update kbmsg keys }, Cmd.none ) 
 
-pathfind : Character -> Character -> Character
-pathfind obi character =
-    character
+pathfind : Model -> Character -> Character -> Character
+pathfind model obi character =
+    let
+        sameArea = obi.area == character.area
+        areaFind = if obi.x > character.x then
+                        { y = 0, x = 1}
+                   else if obi.x < character.x then
+                        { y = 0, x = -1}
+                   else if obi.x == character.x then
+                        { y = 1, x = 0}
+                   else
+                        { y = 0, x = 0}
+        findArea = if obi.area == TopLeft && character.area == BottomLeft then
+                        if character.x > model.gameWidth - 50 then
+                            { y = 1, x = 1}
+                        else
+                            { y = 0, x = 1}
+                   else if obi.area == BottomRight && character.area == BottomLeft then
+                        { y = 0, x = 1}
+                   else if obi.area == TopRight && character.area == BottomLeft then
+                        if character.x > model.gameWidth - 50 then
+                            { y = 1, x = 1}
+                        else
+                            { y = 0, x = 1}
+                   else if obi.area == TopLeft && character.area == BottomRight then
+                        if character.x < model.gameWidth + 50 then
+                            { y = 1, x = -1}
+                        else
+                            { y = 0, x = -1}
+                   else if obi.area == BottomLeft && character.area == BottomRight then
+                        { y = 0, x = -1}
+                   else if obi.area == TopRight && character.area == BottomRight then
+                        if character.x < model.gameWidth + 50 then
+                            { y = 1, x = -1}
+                        else
+                            { y = 0, x = -1}
+                   else if obi.area == BottomLeft && character.area == TopLeft then
+                        if character.x > model.gameWidth - 50 then
+                            { y = -1, x = 0}
+                        else
+                            { y = -1, x = 1}
+                   else if obi.area == BottomRight && character.area == TopLeft then
+                        if character.x < model.gameWidth + 50 then
+                            { y = 1, x = -1}
+                        else
+                            { y = 0, x = -1}
+                   else if obi.area == TopRight && character.area == TopLeft then
+                        if character.x > model.gameWidth - 50 then
+                            { y = -1, x = 1}
+                        else
+                            { y = 0, x = 1}
+                   else if obi.area == TopLeft && character.area == TopRight then
+                        if character.x < model.gameWidth - 50 then
+                            { y = 1, x = 1}
+                        else
+                            { y = 1, x = 1}
+                   else if obi.area == BottomRight && character.area == TopRight then
+                        { y = 1, x = -1}
+                   else if obi.area == BottomLeft && character.area == TopRight then
+                        if character.x < model.gameWidth - 50 then
+                            { y = -1, x = -1}
+                        else
+                            { y = 0, x = -1}
+                   else
+                        { y = 0, x = 0}
+    in
+        { character | aiMove = if sameArea then
+                                    areaFind
+                               else
+                                    findArea
+        }
+            
 
 initiateEnemy : Int -> Character -> Character
 initiateEnemy areaNo character =
-    { character | area = if areaNo == 1 then
-                            TopLeft
-                         else if areaNo == 2 then
-                            TopRight
-                         else if areaNo == 3 then
-                            BottomRight
-                         else if areaNo == 4 then
-                            BottomLeft
+    { character | area = if character.areaSelect then
+                            if areaNo == 1 then
+                                TopLeft
+                            else if areaNo == 2 then
+                                TopRight
+                            else if areaNo == 3 then
+                                BottomRight
+                             else if areaNo == 4 then
+                                BottomLeft
+                            else
+                                TopLeft
                          else
                             TopLeft
-                , exist = Exist
-                , x = if character.area == TopLeft || character.area == BottomLeft then
-                            0
-                      else if character.area == TopRight || character.area == BottomRight then
-                            1500
-                      else 
-                            0
-                , y = if character.area == TopRight || character.area == TopLeft then
-                            0
-                      else if character.area == BottomRight || character.area == BottomLeft then
-                            575
+                , areaSelect = False
+                , x = if character.exist == NonExist then
+                        if character.area == TopLeft || character.area == BottomLeft then
+                                0
+                        else if character.area == TopRight || character.area == BottomRight then
+                                1500
+                        else 
+                                0
                       else
-                            0
-                             }
-
+                        character.x
+                , y = if character.exist == NonExist then 
+                        if character.area == TopRight || character.area == TopLeft then
+                                0
+                        else if character.area == BottomRight || character.area == BottomLeft then
+                                575
+                        else
+                                0
+                      else
+                        character.y
+                , exist = Exist }
+                
 type alias Character = 
     { x : Float
     , y : Float
@@ -264,6 +369,9 @@ type alias Character =
     , gravity : Float
     , area : Area
     , good : Bool
+    , areaSelect : Bool
+    , aiMove : AiMove
+    , aiHit : Bool
     }  
 
 type alias Platform =
@@ -276,10 +384,15 @@ type alias Platform =
 -- The width is to check if we have landed
 makePlatforms : Float -> Float -> List Platform
 makePlatforms w h = 
-    [ { x = w * (1/2),  y = h * (3/4) - 100,  width = 300 } 
-    , { x = w * (1/4),  y = h * (1/2) - 100,  width = 300 }
-    , { x = w * (7/10), y = h * (1/3) - 50,   width = 300 }
+    [ { x = w * (9/10),  y = h * (1/4) - 100,  width = 300 } 
+    , { x = w * (1/10),  y = h * (1/4) - 100,  width = 300 }
+    , { x = w * (1/2),  y = h * (3/4) - 100, width = 300}
+    , { x = w * (1/3), y = h * (7/16) - 50,   width = 300}
+    , { x = w * (2/3), y = h * (7/16) - 50,   width = 300}
     ]
+
+type alias AiMove =
+    { y : Int, x : Int}
 
 type alias Model = 
     { state : State
@@ -293,8 +406,7 @@ type alias Model =
     , ai : Array Character
     , obi : Character
     , keys : List KB.Key
-    , timeSLowY : Float
-    , timeSLowX : Float
+    , obiInRange : Bool
     }
 
 type alias Level =  Int
@@ -311,26 +423,6 @@ type State = Menu | Play | Over
 
 standardAi : Character
 standardAi = 
-    { x = -30.00
-    , y = -30.00
-    , vx = 0.00
-    , vy = 0.00
-    , acceleration = 0.00
-    , exist = NonExist
-    , life = 5
-    , standing = True
-    , action = StandingStill
-    , gravity = 0.1
-    , area = TopLeft
-    , good = False
-    }
-
-aiMake : Array Character
-aiMake = 
-    Array.repeat 1 standardAi
-
-obi : Character
-obi = 
     { x = 0.00
     , y = 0.00
     , vx = 0.00
@@ -341,25 +433,50 @@ obi =
     , standing = True
     , action = StandingStill
     , gravity = 0.1
+    , area = BottomLeft
+    , good = False
+    , areaSelect = True
+    , aiMove = { y = 0, x = 0}
+    , aiHit = False
+    }
+
+aiMake : Array Character
+aiMake = 
+    Array.repeat 1 standardAi
+
+obi : Character
+obi = 
+    { x = 850
+    , y = 200
+    , vx = 0.00
+    , vy = 0.00
+    , acceleration = 0.00
+    , exist = NonExist
+    , life = 5
+    , standing = True
+    , action = StandingStill
+    , gravity = 0.1
     , area = TopLeft
     , good = True
+    , areaSelect = False
+    , aiMove = { y = 0, x = 0}
+    , aiHit = False
     }
 
 init : (Model, Cmd Msg)
 init = (
     { state = Menu
-    , level = 0
+    , level = 10
     , time = 0
     , platforms = []
     , gameWidth = 0
     , gameHeight = 0
-    , jump_speed = -5
+    , jump_speed = -90
     , ground = 0
     , ai = aiMake 
     , obi = obi
     , keys = []
-    , timeSLowY = 0.00
-    , timeSLowX = 0.00
+    , obiInRange = False
     }, Task.perform WindowSize Window.size)
 
 type Msg 
